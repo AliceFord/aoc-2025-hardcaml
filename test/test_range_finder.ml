@@ -6,7 +6,24 @@ module Range_finder = Hardcaml_demo_project.Range_finder
 module Harness = Cyclesim_harness.Make (Range_finder.I) (Range_finder.O)
 
 let ( <--. ) = Bits.( <--. )
-let sample_input_values = [ (68, 0); (30, 0); (48, 1); (5, 0); (60, 1); (55, 0); (1, 0); (99, 0); (14, 1); (82, 0) ]
+(* let sample_input_values = [ (68, 0); (30, 0); (48, 1); (5, 0); (60, 1); (55, 0); (1, 0); (99, 0); (14, 1); (82, 0) ] *)
+
+let parse_d1_line l =
+  let dir = if int_of_char l.[0] = int_of_char 'L' then 0 else 1 in
+  let amount = int_of_string (String.sub l ~pos:1 ~len:(String.length l - 1)) in
+  (amount, dir)
+
+let d1_from_file filename =
+  let chan = In_channel.create filename in
+  let rec loop acc =
+    match In_channel.input_line chan with
+    | None ->
+        In_channel.close chan;
+        List.rev acc
+    | Some line ->
+        loop (parse_d1_line line :: acc)
+  in
+  loop []
 
 let simple_testbench (sim : Harness.Sim.t) =
   let inputs = Cyclesim.inputs sim in
@@ -34,7 +51,7 @@ let simple_testbench (sim : Harness.Sim.t) =
   cycle ();
   inputs.start := Bits.gnd;
   (* Input some data *)
-  List.iter sample_input_values ~f:(fun (x, d) -> feed_input x d);
+  List.iter (d1_from_file "/mnt/c/Users/olive/Documents/coding/aoc2025/hardcaml_template_project/d1.txt") ~f:(fun (x, d) -> feed_input x d);
   while not (Bits.to_bool !(outputs.ready_for_input)) do
     cycle ();
   done;
