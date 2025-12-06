@@ -1,0 +1,7 @@
+(library
+ (name test_aoc_dayX)
+ (libraries core hardcaml aoc_dayX hardcaml_test_harness
+   hardcaml_waveterm re)
+ (preprocess
+  (pps ppx_hardcaml ppx_jane))
+ (inline_tests))
