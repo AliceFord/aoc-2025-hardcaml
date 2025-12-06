@@ -2,11 +2,10 @@ open! Core
 open! Hardcaml
 open! Hardcaml_waveterm
 open! Hardcaml_test_harness
-module Range_finder = Hardcaml_demo_project.Range_finder
-module Harness = Cyclesim_harness.Make (Range_finder.I) (Range_finder.O)
+module Day1 = Aoc_day1.Day1
+module Harness = Cyclesim_harness.Make (Day1.I) (Day1.O)
 
 let ( <--. ) = Bits.( <--. )
-(* let sample_input_values = [ (68, 0); (30, 0); (48, 1); (5, 0); (60, 1); (55, 0); (1, 0); (99, 0); (14, 1); (82, 0) ] *)
 
 let parse_d1_line l =
   let dir = if int_of_char l.[0] = int_of_char 'L' then 0 else 1 in
@@ -51,7 +50,7 @@ let simple_testbench (sim : Harness.Sim.t) =
   cycle ();
   inputs.start := Bits.gnd;
   (* Input some data *)
-  List.iter (d1_from_file "/mnt/c/Users/olive/Documents/coding/aoc2025/hardcaml_template_project/d1.txt") ~f:(fun (x, d) -> feed_input x d);
+  List.iter (d1_from_file "/mnt/c/Users/olive/Documents/coding/aoc2025/hardcaml_template_project/d1_full.txt") ~f:(fun (x, d) -> feed_input x d);
   while not (Bits.to_bool !(outputs.ready_for_input)) do
     cycle ();
   done;
@@ -59,25 +58,13 @@ let simple_testbench (sim : Harness.Sim.t) =
   cycle ();
   inputs.finish := Bits.gnd;
   cycle ();
-  (* Wait for result to become valid *)
   while not (Bits.to_bool !(outputs.num_zeros.valid)) do
     cycle ()
   done;
   let num_zeros = Bits.to_unsigned_int !(outputs.num_zeros.value) in
   print_s [%message "Result" (num_zeros : int)];
-  (* Show in the waveform that [valid] stays high. *)
   cycle ~n:2 ()
 ;;
-
-(* The [waves_config] argument to [Harness.run] determines where and how to save waveforms
-   for viewing later with a waveform viewer. The commented examples below show how to save
-   a waveterm file or a VCD file. *)
-(* let waves_config = Waves_config.no_waves *)
-
-(* let waves_config = *)
-(*   Waves_config.to_directory "/tmp/" *)
-(*   |> Waves_config.as_wavefile_format ~format:Hardcamlwaveform *)
-(* ;; *)
 
 let waves_config =
   Waves_config.to_directory "/mnt/c/Users/olive/Documents/coding/aoc2025/hardcaml_template_project/"
@@ -85,23 +72,19 @@ let waves_config =
 ;;
 
 let%expect_test "Simple test, optionally saving waveforms to disk" =
-  Harness.run_advanced ~waves_config ~create:Range_finder.hierarchical simple_testbench;
+  Harness.run_advanced ~waves_config ~create:Day1.hierarchical simple_testbench;
   [%expect {| (Result (num_zeros 1)) |}]
 ;;
 
 let%expect_test "Simple test with printing waveforms directly" =
-  (* For simple tests, we can print the waveforms directly in an expect-test (and use the
-     command [dune promote] to update it after the tests run). This is useful for quickly
-     visualizing or documenting a simple circuit, but limits the amount of data that can
-     be shown. *)
   let display_rules =
     [ Display_rule.port_name_matches
         ~wave_format:(Bit_or Unsigned_int)
-        (Re.Glob.glob "range_finder*" |> Re.compile)
+        (Re.Glob.glob "day1*" |> Re.compile)
     ]
   in
   Harness.run_advanced
-    ~create:Range_finder.hierarchical
+    ~create:Day1.hierarchical
     ~trace:`Everything
     ~print_waves_after_test:(fun waves ->
       Waveform.print

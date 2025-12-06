@@ -1,16 +1,9 @@
-(* An example design that takes a series of input values and calculates the range between
-   the largest and smallest one. *)
-
-(* We generally open Core and Hardcaml in any source file in a hardware project. For
-   design source files specifically, we also open Signal. *)
 open! Core
 open! Hardcaml
 open! Signal
 
 let num_bits = 16
 
-(* Every hardcaml module should have an I and an O record, which define the module
-   interface. *)
 module I = struct
   type 'a t =
     { clock : 'a
@@ -149,5 +142,5 @@ let create scope ({ clock; clear; start; finish; num_in; dir_in; data_in_valid }
    waveforms and (optionally) the generated RTL. *)
 let hierarchical scope =
   let module Scoped = Hierarchy.In_scope (I) (O) in
-  Scoped.hierarchical ~scope ~name:"range_finder" create
+  Scoped.hierarchical ~scope ~name:"day1" create
 ;;

@@ -28,7 +28,7 @@ $upscope $end
 $scope module various $end
 $var wire 1 6 gnd $end
 $var wire 1 7 vdd $end
-$scope module range_finder $end
+$scope module day1 $end
 $var wire 16 2 pos $end
 $scope module -inputs $end
 $var wire 1 5 clear $end
