@@ -10,8 +10,8 @@ module I = struct
     ; clear : 'a
     ; start : 'a
     ; finish : 'a
-    ; num_in : 'a [@bits num_bits]
-    ; dir_in : 'a [@bits 1]
+    ; data_in : 'a [@bits num_bits]
+    ; data_sep : 'a [@bits 1]
     ; data_in_valid : 'a
     }
   [@@deriving hardcaml]
@@ -20,8 +20,7 @@ end
 module O = struct
   type 'a t =
     {
-      num_zeros : 'a With_valid.t [@bits num_bits];
-      ready_for_input : 'a [@bits 1]
+      sum : 'a With_valid.t [@bits 32]
     }
   [@@deriving hardcaml]
 end
@@ -30,105 +29,78 @@ module States = struct
   type t =
     | Idle
     | Accepting_inputs
-    | Mod100
-    | Just_finished
+    | Input_sep
     | Done
   [@@deriving sexp_of, compare ~localize, enumerate]
 end
 
-let create scope ({ clock; clear; start; finish; num_in; dir_in; data_in_valid } : _ I.t) : _ O.t
+let create scope ({ clock; clear; start; finish; data_in; data_sep; data_in_valid } : _ I.t) : _ O.t
   =
   let spec = Reg_spec.create ~clock ~clear () in
   let open Always in
   let sm =
     State_machine.create (module States) spec
   in
-  let%hw_var pos = Variable.reg spec ~width:num_bits in
+  let%hw_var max_so_far = Variable.reg spec ~width:num_bits in  (* 4 is all that is necssary *)
+  let%hw_var snd_max_so_far = Variable.reg spec ~width:num_bits in
 
-  let num_zeros = Variable.reg spec ~width:num_bits in
-  let num_zeros_valid = Variable.reg spec ~width:1 in
-  let ready_for_input = Variable.reg spec ~width:1 in
+  let sum = Variable.reg spec ~width:32 in
+  let sum_valid = Variable.reg spec ~width:1 in
+
+  (* logic: store max and second max seen thus far. update. sum. *)
 
   compile
     [ sm.switch
         [ ( Idle
           , [ when_
                 start
-                [ pos <--. 50;
-                  num_zeros <-- zero num_bits;
-                  num_zeros_valid <-- gnd;
-                  ready_for_input <-- vdd;
-                  sm.set_next Accepting_inputs
+                [ max_so_far <-- zero num_bits;
+                  snd_max_so_far <-- zero num_bits;
+                  sum <-- zero 32;
+                  sum_valid <-- gnd;
+                  sm.set_next Accepting_inputs;
                 ]
             ] )
         ; ( Accepting_inputs
-          , [ when_
-                data_in_valid
-                [ 
-                  ready_for_input <-- gnd; (* no longer ready for input *)
-                  if_ (dir_in ==:. 1) [
-                    if_ (pos.value +: num_in >=+. 100) [
-                      pos <-- pos.value +: num_in -:. 100;
-                      sm.set_next Mod100;
-                    ] [
-                      pos <-- pos.value +: num_in;
-                      ready_for_input <-- vdd; (* no modulo needed *)
-                    ];
-                  ] [
-                    if_ (num_in >+ pos.value) [
-                      pos <-- pos.value -: num_in +:. 100;
-                      sm.set_next Mod100;
-                    ] [
-                      pos <-- pos.value -: num_in;
-                      ready_for_input <-- vdd; (* no modulo needed *)
-                    ];
-
-                    (*when_ (pos.value -: num_in ==:. 0) [
-                      num_zeros <-- (num_zeros.value +:. 1);
-                    ] (* pt 2 *)*)
-                  ];
-
-                  when_ (pos.value ==:. 0) [
-                    num_zeros <-- (num_zeros.value +:. 1);
-                  ] (* pt 1 *)
-                ]
-            ; when_ finish [ sm.set_next Just_finished ]
-            ] )
-        ; ( Mod100
-          , [ 
-              if_ (pos.value >=+. 100) [
-                pos <-- pos.value -:. 100;
-              ] [
-                if_ (pos.value <+. 0) [
-                  pos <-- pos.value +:. 100;
+          , [ when_ data_in_valid [
+                if_ (snd_max_so_far.value >: max_so_far.value) [
+                  max_so_far <-- snd_max_so_far.value;
+                  snd_max_so_far <-- data_in;
                 ] [
-                  ready_for_input <-- vdd;
-                  sm.set_next Accepting_inputs;
+                  when_ (data_in >: snd_max_so_far.value) [
+                    snd_max_so_far <-- data_in;
+                  ]
                 ]
               ];
-              (*num_zeros <-- (num_zeros.value +:. 1) (* pt 2  *)*)
+              when_ data_sep [sm.set_next Input_sep];
+              when_ finish [ sm.set_next Done ]
             ] )
-        ; ( Just_finished
+        ; ( Input_sep
           , [ 
-              when_ (pos.value ==:. 0) [ (* final check *)
-                num_zeros <-- (num_zeros.value +:. 1);
-              ];
-              num_zeros_valid <-- vdd;
-              sm.set_next Done
+              sum <-- sum.value +: (max_so_far.value *: (of_int_trunc 10 ~width:16) +: (uresize snd_max_so_far.value ~width:32));
+              max_so_far <-- zero num_bits;
+              snd_max_so_far <-- zero num_bits;
+              sm.set_next Accepting_inputs;
             ] )
         ; ( Done
           , [ 
+              when_ (max_so_far.value >:. 0) [
+                sum <-- sum.value +: (max_so_far.value *: (of_int_trunc 10 ~width:16) +: (uresize snd_max_so_far.value ~width:32));
+                max_so_far <-- zero num_bits;
+                snd_max_so_far <-- zero num_bits;
+              ];
+
+              sum_valid <-- vdd;
               when_ finish [ sm.set_next Accepting_inputs ]
             ] )
         ]
     ];
   { 
-    num_zeros = { value = num_zeros.value; valid = num_zeros_valid.value };
-    ready_for_input = ready_for_input.value
+    sum = { value = sum.value; valid = sum_valid.value }
   }
 ;;
 
 let hierarchical scope =
   let module Scoped = Hierarchy.In_scope (I) (O) in
-  Scoped.hierarchical ~scope ~name:"dayX" create
+  Scoped.hierarchical ~scope ~name:"day3" create
 ;;

@@ -9,8 +9,8 @@ module I : sig
     ; clear : 'a
     ; start : 'a
     ; finish : 'a
-    ; num_in : 'a
-    ; dir_in : 'a
+    ; data_in : 'a
+    ; data_sep : 'a
     ; data_in_valid : 'a
     }
   [@@deriving hardcaml]
@@ -18,8 +18,7 @@ end
 
 module O : sig
   type 'a t = { 
-    num_zeros : 'a With_valid.t;
-    ready_for_input : 'a
+    sum : 'a With_valid.t
   } [@@deriving hardcaml]
 end
 
