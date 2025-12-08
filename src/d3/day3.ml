@@ -10,6 +10,7 @@ module I = struct
     ; clear : 'a
     ; start : 'a
     ; finish : 'a
+    ; part: 'a
     ; data_in : 'a [@bits num_bits]
     ; data_sep : 'a [@bits 1]
     ; data_in_valid : 'a
@@ -28,20 +29,21 @@ end
 module States = struct
   type t =
     | Idle
-    | Accepting_inputs
-    | Input_sep
-    | Done
+    | Accepting_inputs1
+    | Done1
+    | Accepting_inputs2
+    | Done2
   [@@deriving sexp_of, compare ~localize, enumerate]
 end
 
-let create scope ({ clock; clear; start; finish; data_in; data_sep; data_in_valid } : _ I.t) : _ O.t
+let create scope ({ clock; clear; start; finish; part; data_in; data_sep; data_in_valid } : _ I.t) : _ O.t
   =
   let spec = Reg_spec.create ~clock ~clear () in
   let open Always in
   let sm =
     State_machine.create (module States) spec
   in
-  let%hw_var max_so_far = Variable.reg spec ~width:num_bits in  (* 4 is all that is necssary *)
+  let%hw_var max_so_far = Variable.reg spec ~width:num_bits in
   let%hw_var snd_max_so_far = Variable.reg spec ~width:num_bits in
 
   let sum = Variable.reg spec ~width:32 in
@@ -58,10 +60,14 @@ let create scope ({ clock; clear; start; finish; data_in; data_sep; data_in_vali
                   snd_max_so_far <-- zero num_bits;
                   sum <-- zero 32;
                   sum_valid <-- gnd;
-                  sm.set_next Accepting_inputs;
+                  if_ (part) [
+                    sm.set_next Accepting_inputs1;
+                  ] [
+                    sm.set_next Accepting_inputs1;
+                  ]
                 ]
             ] )
-        ; ( Accepting_inputs
+        ; ( Accepting_inputs1
           , [ when_ data_in_valid [
                 if_ (snd_max_so_far.value >: max_so_far.value) [
                   max_so_far <-- snd_max_so_far.value;
@@ -72,17 +78,14 @@ let create scope ({ clock; clear; start; finish; data_in; data_sep; data_in_vali
                   ]
                 ]
               ];
-              when_ data_sep [sm.set_next Input_sep];
-              when_ finish [ sm.set_next Done ]
+              when_ data_sep [ 
+                sum <-- sum.value +: (max_so_far.value *: (of_int_trunc 10 ~width:16) +: (uresize snd_max_so_far.value ~width:32));
+                max_so_far <-- zero num_bits;
+                snd_max_so_far <-- zero num_bits;
+              ];
+              when_ finish [ sm.set_next Done1 ]
             ] )
-        ; ( Input_sep
-          , [ 
-              sum <-- sum.value +: (max_so_far.value *: (of_int_trunc 10 ~width:16) +: (uresize snd_max_so_far.value ~width:32));
-              max_so_far <-- zero num_bits;
-              snd_max_so_far <-- zero num_bits;
-              sm.set_next Accepting_inputs;
-            ] )
-        ; ( Done
+        ; ( Done1
           , [ 
               when_ (max_so_far.value >:. 0) [
                 sum <-- sum.value +: (max_so_far.value *: (of_int_trunc 10 ~width:16) +: (uresize snd_max_so_far.value ~width:32));
@@ -91,7 +94,7 @@ let create scope ({ clock; clear; start; finish; data_in; data_sep; data_in_vali
               ];
 
               sum_valid <-- vdd;
-              when_ finish [ sm.set_next Accepting_inputs ]
+              when_ finish [ sm.set_next Idle ]
             ] )
         ]
     ];
