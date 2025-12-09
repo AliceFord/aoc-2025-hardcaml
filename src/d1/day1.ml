@@ -127,7 +127,7 @@ let create scope ({ clock; clear; start; finish; num_in; dir_in; data_in_valid }
             ] )
         ; ( Done
           , [ 
-              when_ finish [ sm.set_next Accepting_inputs ]
+              when_ finish [ sm.set_next Idle ]
             ] )
         ]
     ];
