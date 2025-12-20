@@ -121,7 +121,7 @@ let create scope ({ clock; clear; start; finish; part; data_in; data_sep; data_i
               ];
 
               sum_valid <-- vdd;
-              when_ finish [ sm.set_next Idle ]
+              sm.set_next Idle
             ] )
         ; ( Accepting_inputs2
           , [ when_ data_in_valid [
@@ -147,7 +147,7 @@ let create scope ({ clock; clear; start; finish; part; data_in; data_sep; data_i
               when_ (max_so_far.value >:. 0) ([sum <-- sum.value +: get_sum ()] @ set_maxes_zero ());
 
               sum_valid <-- vdd;
-              when_ finish [ sm.set_next Idle ]
+              sm.set_next Idle
             ] )
         ]
     ];
