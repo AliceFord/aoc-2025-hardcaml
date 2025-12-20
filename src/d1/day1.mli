@@ -14,6 +14,7 @@ module I : sig
     ; clear : 'a
     ; start : 'a
     ; finish : 'a
+    ; part  : 'a
     ; num_in : 'a
     ; dir_in : 'a
     ; data_in_valid : 'a
@@ -23,7 +24,8 @@ end
 
 module O : sig
   type 'a t = { 
-    num_zeros : 'a With_valid.t;
+    num_zeros : 'a;
+    num_zeros_valid : 'a;
     ready_for_input : 'a
   } [@@deriving hardcaml]
 end

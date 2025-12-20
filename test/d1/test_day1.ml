@@ -24,7 +24,7 @@ let d1_from_file filename =
   in
   loop []
 
-let simple_testbench (sim : Harness.Sim.t) =
+let simple_testbench part (sim : Harness.Sim.t) =
   let inputs = Cyclesim.inputs sim in
   let outputs = Cyclesim.outputs sim in
   let cycle ?n () = Cyclesim.cycle ?n sim in
@@ -38,7 +38,7 @@ let simple_testbench (sim : Harness.Sim.t) =
     inputs.data_in_valid := Bits.vdd;
     cycle ();
     inputs.data_in_valid := Bits.gnd;
-    cycle ()
+    (* cycle () *)
   in
   (* Reset the design *)
   inputs.clear := Bits.vdd;
@@ -47,10 +47,11 @@ let simple_testbench (sim : Harness.Sim.t) =
   cycle ();
   (* Pulse the start signal *)
   inputs.start := Bits.vdd;
+  inputs.part <--. part;
   cycle ();
   inputs.start := Bits.gnd;
   (* Input some data *)
-  List.iter (d1_from_file "/mnt/c/Users/olive/Documents/coding/aoc2025/hardcaml_template_project/d1_full.txt") ~f:(fun (x, d) -> feed_input x d);
+  List.iter (d1_from_file "/mnt/c/Users/olive/Documents/coding/aoc2025/hardcaml_template_project/d1_partial.txt") ~f:(fun (x, d) -> feed_input x d);
   while not (Bits.to_bool !(outputs.ready_for_input)) do
     cycle ();
   done;
@@ -58,10 +59,10 @@ let simple_testbench (sim : Harness.Sim.t) =
   cycle ();
   inputs.finish := Bits.gnd;
   cycle ();
-  while not (Bits.to_bool !(outputs.num_zeros.valid)) do
+  while not (Bits.to_bool !(outputs.num_zeros_valid)) do
     cycle ()
   done;
-  let num_zeros = Bits.to_unsigned_int !(outputs.num_zeros.value) in
+  let num_zeros = Bits.to_unsigned_int !(outputs.num_zeros) in
   print_s [%message "Result" (num_zeros : int)];
   cycle ~n:2 ()
 ;;
@@ -71,12 +72,7 @@ let waves_config =
   |> Waves_config.as_wavefile_format ~format:Vcd
 ;;
 
-let%expect_test "Simple test, optionally saving waveforms to disk" =
-  Harness.run_advanced ~waves_config ~create:Day1.hierarchical simple_testbench;
-  [%expect {| (Result (num_zeros 1)) |}]
-;;
-
-let%expect_test "Simple test with printing waveforms directly" =
+let%expect_test "Waveform test for part 1" =
   let display_rules =
     [ Display_rule.port_name_matches
         ~wave_format:(Bit_or Unsigned_int)
@@ -86,20 +82,100 @@ let%expect_test "Simple test with printing waveforms directly" =
   Harness.run_advanced
     ~create:Day1.hierarchical
     ~trace:`Everything
+    ~waves_config
     ~print_waves_after_test:(fun waves ->
       Waveform.print
         ~display_rules
-          (* [display_rules] is optional, if not specified, it will print all named
-             signals in the design. *)
         ~signals_width:30
         ~display_width:92
         ~wave_width:1
-        (* [wave_width] configures how many chars wide each clock cycle is *)
         waves)
-    simple_testbench;
+    (simple_testbench 0);
   [%expect
     {|
-    (Result (range 146))
-    ┌
+    (Result (num_zeros 3))
+    ┌Signals─────────────────────┐┌Waves───────────────────────────────────────────────────────┐
+    │day1$i$clear                ││────┐                                                       │
+    │                            ││    └───────────────────────────────────────────────────────│
+    │day1$i$clock                ││┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ │
+    │                            ││  └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─│
+    │day1$i$data_in_valid        ││            ┌───┐   ┌───────┐   ┌───┐   ┌───┐   ┌───────┐   │
+    │                            ││────────────┘   └───┘       └───┘   └───┘   └───┘       └───│
+    │day1$i$dir_in               ││                        ┌───────┐       ┌───────┐           │
+    │                            ││────────────────────────┘       └───────┘       └───────────│
+    │day1$i$finish               ││                                                            │
+    │                            ││────────────────────────────────────────────────────────────│
+    │                            ││────────────┬───────┬───┬───────┬───────┬───────┬───┬───────│
+    │day1$i$num_in               ││ 0          │68     │30 │48     │5      │60     │55 │1      │
+    │                            ││────────────┴───────┴───┴───────┴───────┴───────┴───┴───────│
+    │day1$i$part                 ││                                                            │
+    │                            ││────────────────────────────────────────────────────────────│
+    │day1$i$start                ││        ┌───┐                                               │
+    │                            ││────────┘   └───────────────────────────────────────────────│
+    │                            ││────────────────────────────────────┬───────────────────┬───│
+    │day1$o$num_zeros            ││ 0                                  │1                  │2  │
+    │                            ││────────────────────────────────────┴───────────────────┴───│
+    │day1$o$num_zeros_valid      ││                                                            │
+    │                            ││────────────────────────────────────────────────────────────│
+    │day1$o$ready_for_input      ││            ┌───┐   ┌───────┐   ┌───┐   ┌───┐   ┌───────┐   │
+    │                            ││────────────┘   └───┘       └───┘   └───┘   └───┘       └───│
+    │                            ││────────────┬───┬───────┬───┬───────┬───────┬───────┬───┬───│
+    │day1$pos                    ││ 0          │50 │82     │52 │0      │95     │55     │0  │99 │
+    │                            ││────────────┴───┴───────┴───┴───────┴───────┴───────┴───┴───│
+    └────────────────────────────┘└────────────────────────────────────────────────────────────┘
+    |}]
+;;
+
+let%expect_test "Waveform test for part 2" =
+  let display_rules =
+    [ Display_rule.port_name_matches
+        ~wave_format:(Bit_or Unsigned_int)
+        (Re.Glob.glob "day1*" |> Re.compile)
+    ]
+  in
+  Harness.run_advanced
+    ~create:Day1.hierarchical
+    ~trace:`Everything
+    ~waves_config
+    ~print_waves_after_test:(fun waves ->
+      Waveform.print
+        ~display_rules
+        ~signals_width:30
+        ~display_width:92
+        ~wave_width:1
+        waves)
+    (simple_testbench 1);
+  [%expect
+    {|
+    (Result (num_zeros 6))
+    ┌Signals─────────────────────┐┌Waves───────────────────────────────────────────────────────┐
+    │day1$i$clear                ││────┐                                                       │
+    │                            ││    └───────────────────────────────────────────────────────│
+    │day1$i$clock                ││┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ │
+    │                            ││  └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─│
+    │day1$i$data_in_valid        ││            ┌───┐       ┌───────┐   ┌───┐       ┌───┐   ┌───│
+    │                            ││────────────┘   └───────┘       └───┘   └───────┘   └───┘   │
+    │day1$i$dir_in               ││                            ┌───────┐           ┌───────┐   │
+    │                            ││────────────────────────────┘       └───────────┘       └───│
+    │day1$i$finish               ││                                                            │
+    │                            ││────────────────────────────────────────────────────────────│
+    │                            ││────────────┬───────────┬───┬───────┬───────────┬───────┬───│
+    │day1$i$num_in               ││ 0          │68         │30 │48     │5          │60     │55 │
+    │                            ││────────────┴───────────┴───┴───────┴───────────┴───────┴───│
+    │day1$i$part                 ││        ┌───────────────────────────────────────────────────│
+    │                            ││────────┘                                                   │
+    │day1$i$start                ││        ┌───┐                                               │
+    │                            ││────────┘   └───────────────────────────────────────────────│
+    │                            ││────────────────────┬───────────┬───────┬───┬───────┬───────│
+    │day1$o$num_zeros            ││ 0                  │1          │2      │1  │2      │3      │
+    │                            ││────────────────────┴───────────┴───────┴───┴───────┴───────│
+    │day1$o$num_zeros_valid      ││                                                            │
+    │                            ││────────────────────────────────────────────────────────────│
+    │day1$o$ready_for_input      ││            ┌───┐       ┌───────┐   ┌───┐       ┌───┐   ┌───│
+    │                            ││────────────┘   └───────┘       └───┘   └───────┘   └───┘   │
+    │                            ││────────────┬───┬───┬───────┬───┬───────┬───┬───────┬───────│
+    │day1$pos                    ││ 0          │50 │42.│82     │52 │0      │42.│95     │55     │
+    │                            ││────────────┴───┴───┴───────┴───┴───────┴───┴───────┴───────│
+    └────────────────────────────┘└────────────────────────────────────────────────────────────┘
     |}]
 ;;
