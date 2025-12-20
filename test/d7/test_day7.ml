@@ -19,7 +19,7 @@ let d7_from_file filename =
   in
   loop []
 
-let simple_testbench (sim : Harness.Sim.t) =
+let simple_testbench part (sim : Harness.Sim.t) =
   let inputs = Cyclesim.inputs sim in
   let outputs = Cyclesim.outputs sim in
   let cycle ?n () = Cyclesim.cycle ?n sim in
@@ -38,10 +38,12 @@ let simple_testbench (sim : Harness.Sim.t) =
   cycle ();
   (* Pulse the start signal *)
   inputs.start := Bits.vdd;
+  inputs.part <--. part;
   cycle ();
   inputs.start := Bits.gnd;
+  inputs.part := Bits.gnd;
   (* Input some data *)
-  List.iter (d7_from_file "/mnt/c/Users/olive/Documents/coding/aoc2025/hardcaml_template_project/d7_full.txt") ~f:(fun c -> feed_input c);
+  List.iter (d7_from_file "/mnt/c/Users/olive/Documents/coding/aoc2025/hardcaml_template_project/d7_partial.txt") ~f:(fun c -> feed_input c);
   inputs.finish := Bits.vdd;
   cycle ();
   inputs.finish := Bits.gnd;
@@ -77,7 +79,7 @@ let%expect_test "Simple test with printing waveforms directly" =
         ~display_width:92
         ~wave_width:1
         waves)
-    simple_testbench;
+    (simple_testbench 1);
   [%expect
     {|
     (Result (range 146))

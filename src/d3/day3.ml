@@ -2,7 +2,8 @@ open! Core
 open! Hardcaml
 open! Signal
 
-let num_bits = 16
+let num_bits = 4
+let num_bits_out = 64
 
 module I = struct
   type 'a t =
@@ -21,7 +22,8 @@ end
 module O = struct
   type 'a t =
     {
-      sum : 'a With_valid.t [@bits 32]
+      sum_value : 'a [@bits 64];
+      sum_valid : 'a [@bits 1]
     }
   [@@deriving hardcaml]
 end
@@ -46,26 +48,51 @@ let create scope ({ clock; clear; start; finish; part; data_in; data_sep; data_i
   let%hw_var max_so_far = Variable.reg spec ~width:num_bits in
   let%hw_var snd_max_so_far = Variable.reg spec ~width:num_bits in
 
-  let sum = Variable.reg spec ~width:32 in
+  let%hw_var m1 = Variable.reg spec ~width:num_bits in
+  let%hw_var m2 = Variable.reg spec ~width:num_bits in
+  let%hw_var m3 = Variable.reg spec ~width:num_bits in
+  let%hw_var m4 = Variable.reg spec ~width:num_bits in
+  let%hw_var m5 = Variable.reg spec ~width:num_bits in
+  let%hw_var m6 = Variable.reg spec ~width:num_bits in
+  let%hw_var m7 = Variable.reg spec ~width:num_bits in
+  let%hw_var m8 = Variable.reg spec ~width:num_bits in
+  let%hw_var m9 = Variable.reg spec ~width:num_bits in
+  let%hw_var m10 = Variable.reg spec ~width:num_bits in
+  let%hw_var m11 = Variable.reg spec ~width:num_bits in
+  let%hw_var m12 = Variable.reg spec ~width:num_bits in
+
+  let maxes = [m1;m2;m3;m4;m5;m6;m7;m8;m9;m10;m11;m12] in
+
+  let shift_up n = (* starting at m<n>, shift all lower bits up *)
+    List.map2_exn ~f:(fun ma mb -> ma <-- mb.value) (List.take (List.drop maxes (n-1)) (12-n)) (List.drop maxes n) @ [m12 <-- data_in]
+  in
+  let set_maxes_zero () : Always.t list = 
+    List.map ~f:(fun ma -> ma <-- zero num_bits) maxes;
+  in
+  let get_sum () =
+    let new_list = List.mapi ~f:(fun i ma -> ma.value *: (of_int_trunc (Int.pow 10 (11-i)) ~width:(num_bits_out - num_bits))) (List.take maxes 11) in
+    List.fold_left new_list ~f:(fun acc x -> (x +: acc)) ~init:(uresize m12.value ~width:num_bits_out)
+  in
+
+  let sum = Variable.reg spec ~width:num_bits_out in
   let sum_valid = Variable.reg spec ~width:1 in
 
   (* logic: store max and second max seen thus far. update. sum. *)
 
+  (* logic for second part: same. it's ridiculous, but fast. *)
+
   compile
     [ sm.switch
         [ ( Idle
-          , [ when_
-                start
-                [ max_so_far <-- zero num_bits;
+          , [ when_ start [ 
+                sum <-- zero num_bits_out;
+                sum_valid <-- gnd;
+                if_ (part) ([sm.set_next Accepting_inputs2] @ set_maxes_zero ()) [
+                  max_so_far <-- zero num_bits;
                   snd_max_so_far <-- zero num_bits;
-                  sum <-- zero 32;
-                  sum_valid <-- gnd;
-                  if_ (part) [
-                    sm.set_next Accepting_inputs1;
-                  ] [
-                    sm.set_next Accepting_inputs1;
-                  ]
+                  sm.set_next Accepting_inputs1;
                 ]
+              ]
             ] )
         ; ( Accepting_inputs1
           , [ when_ data_in_valid [
@@ -79,7 +106,7 @@ let create scope ({ clock; clear; start; finish; part; data_in; data_sep; data_i
                 ]
               ];
               when_ data_sep [ 
-                sum <-- sum.value +: (max_so_far.value *: (of_int_trunc 10 ~width:16) +: (uresize snd_max_so_far.value ~width:32));
+                sum <-- sum.value +: (max_so_far.value *: (of_int_trunc 10 ~width:60) +: (uresize snd_max_so_far.value ~width:num_bits_out));
                 max_so_far <-- zero num_bits;
                 snd_max_so_far <-- zero num_bits;
               ];
@@ -88,7 +115,7 @@ let create scope ({ clock; clear; start; finish; part; data_in; data_sep; data_i
         ; ( Done1
           , [ 
               when_ (max_so_far.value >:. 0) [
-                sum <-- sum.value +: (max_so_far.value *: (of_int_trunc 10 ~width:16) +: (uresize snd_max_so_far.value ~width:32));
+                sum <-- sum.value +: (max_so_far.value *: (of_int_trunc 10 ~width:60) +: (uresize snd_max_so_far.value ~width:num_bits_out));
                 max_so_far <-- zero num_bits;
                 snd_max_so_far <-- zero num_bits;
               ];
@@ -96,10 +123,37 @@ let create scope ({ clock; clear; start; finish; part; data_in; data_sep; data_i
               sum_valid <-- vdd;
               when_ finish [ sm.set_next Idle ]
             ] )
+        ; ( Accepting_inputs2
+          , [ when_ data_in_valid [
+                if_ (m2.value >: m1.value) (shift_up 1) [
+                if_ (m3.value >: m2.value) (shift_up 2) [
+                if_ (m4.value >: m3.value) (shift_up 3) [
+                if_ (m5.value >: m4.value) (shift_up 4) [
+                if_ (m6.value >: m5.value) (shift_up 5) [
+                if_ (m7.value >: m6.value) (shift_up 6) [
+                if_ (m8.value >: m7.value) (shift_up 7) [
+                if_ (m9.value >: m8.value) (shift_up 8) [
+                if_ (m10.value >: m9.value) (shift_up 9) [
+                if_ (m11.value >: m10.value) (shift_up 10) [
+                if_ (m12.value >: m11.value) (shift_up 11) [
+                if_ (data_in >: m12.value) (shift_up 12) [
+                ]]]]]]]]]]]]
+              ];
+              when_ data_sep ([sum <-- sum.value +: get_sum ()] @ set_maxes_zero ());
+              when_ finish [ sm.set_next Done2 ]
+            ] )
+        ; ( Done2
+          , [ 
+              when_ (max_so_far.value >:. 0) ([sum <-- sum.value +: get_sum ()] @ set_maxes_zero ());
+
+              sum_valid <-- vdd;
+              when_ finish [ sm.set_next Idle ]
+            ] )
         ]
     ];
   { 
-    sum = { value = sum.value; valid = sum_valid.value }
+    sum_value = sum.value;
+    sum_valid = sum_valid.value;
   }
 ;;
 

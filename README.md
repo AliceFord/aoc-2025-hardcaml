@@ -22,6 +22,9 @@ Build and run tests for the day you wish to target (or all days):
 
 - `dune runtest test/dX/`
 
+To export to VHDL:
+
+
 ## Implementation notes
 
 ### Day 1

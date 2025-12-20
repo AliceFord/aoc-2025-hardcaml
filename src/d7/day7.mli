@@ -9,6 +9,7 @@ module I : sig
     ; clear : 'a
     ; start : 'a
     ; finish : 'a
+    ; part : 'a
     ; data_in : 'a
     ; data_in_valid : 'a
     }

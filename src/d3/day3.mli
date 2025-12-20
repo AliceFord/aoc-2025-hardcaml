@@ -19,7 +19,8 @@ end
 
 module O : sig
   type 'a t = { 
-    sum : 'a With_valid.t
+    sum_value : 'a;
+    sum_valid : 'a; 
   } [@@deriving hardcaml]
 end
 
