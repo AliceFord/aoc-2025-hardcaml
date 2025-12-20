@@ -6,7 +6,7 @@ First time writing anything at all for hardware, was fun to learn! Would be keen
 
 On that note, I've probably done tons of stuff in suboptimal ways, due to my distinct lack of understanding (at least at the start) about how any of this worked.
 
-Based on (https://github.com/janestreet/hardcaml_template_project/)[a HardCaml template by Jane Street].
+Based on [a HardCaml template by Jane Street](https://github.com/janestreet/hardcaml_template_project/).
 
 ## How to run:
 
